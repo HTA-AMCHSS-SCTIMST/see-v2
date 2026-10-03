@@ -103,8 +103,11 @@ require_role <- function(ok, msg = "You do not have permission for this action."
 
 add_person <- function(name, email, person_type, affiliation = "", user) {
   require_role(can_provision_people(user))
-  email <- tolower(trimws(email))
-  if (!nzchar(email) || !grepl("@", email)) stop("Enter a valid email.")
+  v_res <- validate_email(email)
+  if (!v_res$ok) {
+    stop(v_res$message, call. = FALSE)
+  }
+  email <- v_res$clean
   person_type <- match.arg(person_type, c("admin", "facilitator", "expert"))
   org <- ensure_org()
   now <- iso_now()

@@ -141,7 +141,10 @@ survey_root_ui <- function(input, rv, study_key, ping, token_key = "") {
           class = "login-card",
           style = "max-width: 520px; margin: 0 auto; text-align: center;",
           htmltools::tags$h2(style = "color: var(--primary); margin-bottom: 0.25rem;", st$title),
-          htmltools::tags$p(class = "muted", welcome$conductedBy %||% "AMCHSS · SCTIMST"),
+          htmltools::tags$p(class = "muted", style = "font-weight: 500;", welcome$conductedBy %||% welcome$institution %||% "Achutha Menon Centre for Health Science Studies (AMCHSS), SCTIMST"),
+          if (nzchar(welcome$contactEmail %||% "")) {
+            htmltools::tags$p(style = "font-size: 0.8rem; color: #64748b; margin-top: -0.2rem;", sprintf("Lead Contact: %s", welcome$contactEmail))
+          } else NULL,
           htmltools::tags$p(
             style = "margin: 1.25rem 0 1.5rem; color: #475569; font-size: 0.95rem; line-height: 1.5;",
             "Enter the email address invited by the facilitator to access your elicitation survey."
@@ -197,9 +200,21 @@ survey_page_body_content <- function(input, rv, st, qs, r_num, pages, idx) {
           class = "welcome-details-box",
           style = "background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin: 18px 0; text-align: left;",
           htmltools::tags$h4(style = "margin: 0 0 10px 0; font-size: 0.95rem; font-weight: 700; color: #0f172a;", "Study Background & Conduct"),
-          htmltools::tags$p(style = "margin: 0 0 6px 0; font-size: 0.9rem; color: #475569;",
-            htmltools::strong("Conducted by: "), "Achutha Menon Centre for Health Science Studies (AMCHSS), Sree Chitra Tirunal Institute for Medical Sciences & Technology (SCTIMST), Trivandrum"
-          ),
+          {
+            w_cfg <- (st$protocolConfig %||% list())$surveyWelcome %||% list()
+            cond_inst <- w_cfg$conductedBy %||% w_cfg$institution %||% "Achutha Menon Centre for Health Science Studies (AMCHSS), Sree Chitra Tirunal Institute for Medical Sciences & Technology (SCTIMST), Trivandrum"
+            lead_email <- w_cfg$contactEmail %||% ""
+            htmltools::tagList(
+              htmltools::tags$p(style = "margin: 0 0 6px 0; font-size: 0.9rem; color: #475569;",
+                htmltools::strong("Conducted by: "), cond_inst
+              ),
+              if (nzchar(lead_email)) {
+                htmltools::tags$p(style = "margin: 0 0 6px 0; font-size: 0.9rem; color: #475569;",
+                  htmltools::strong("Lead Contact: "), lead_email
+                )
+              } else NULL
+            )
+          },
           htmltools::tags$p(style = "margin: 0 0 6px 0; font-size: 0.9rem; color: #475569;",
             htmltools::strong("Progress saving: "), "Your progress is continuously saved, so you can pause the survey at any time and return to it later."
           ),
@@ -534,6 +549,17 @@ survey_page_body_content <- function(input, rv, st, qs, r_num, pages, idx) {
               )
             )
           },
+          if (identical(as.character(st$slug %||% ""), "infection-rate-demo")) {
+            shiny::div(
+              style = "margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px dashed #cbd5e1;",
+              shiny::actionButton(
+                "retake_demo_survey",
+                "🔄 Retake / Re-explore Demo Survey",
+                class = "btn-secondary btn-sm",
+                style = "font-weight: 600; padding: 6px 14px;"
+              )
+            )
+          } else NULL,
           htmltools::tags$p(class = "muted", style = "font-size: 0.9rem;", paste("Signed in as", rv$survey_user$email)),
           htmltools::tags$p(class = "muted", style = "font-size: 0.82rem; margin-top: 2rem;",
             "AMCHSS · SCTIMST Structured Expert Elicitation Platform"

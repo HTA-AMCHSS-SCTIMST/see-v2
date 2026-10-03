@@ -372,13 +372,30 @@ app_server <- function(input, output, session) {
       require_role(can_seed_demo(rv$user), "Only facilitators or administrators can seed the demo study.")
       rv$seed_info <- seed_demo(rv$user)
       rv$msg <- sprintf(
-        "Demo ready with dummy SHELF judgments (%s). 1-Click Expert Survey: %s  ·  Experts: %s",
-        rv$seed_info$dummyJudgments %||% 0L,
-        rv$seed_info$surveyUrl,
-        paste(rv$seed_info$expertEmails, collapse = ", ")
+        "Interactive Demo '%s' ready with %s expert judgments.",
+        rv$seed_info$title %||% "Surgical Site Infection Rate",
+        rv$seed_info$dummyJudgments %||% 0L
       )
-      ee_log("info", "seeded HTA demo", where = "seed_demo")
+      ee_log("info", "seeded interactive demo", where = "seed_demo")
+      shiny::showModal(demo_walkthrough_modal(rv$seed_info))
     }, error = function(e) ee_handle(rv, e, "seed_demo"))
+  })
+
+  shiny::observeEvent(input$demo_goto_consensus, {
+    shiny::removeModal()
+    sid <- rv$seed_info$studyId %||% ""
+    if (nzchar(sid)) {
+      rv$study_id <- sid
+      rv$study_cache <- find_study(sid)
+      rv$tab <- "responses"
+    }
+  })
+
+  shiny::observeEvent(input$demo_goto_create, {
+    shiny::removeModal()
+    rv$page <- "dash"
+    rv$study_id <- ""
+    session$sendCustomMessage("ee_scroll_to", ".create-panel")
   })
 
   shiny::observeEvent(input$create_study, {
@@ -401,7 +418,6 @@ app_server <- function(input, output, session) {
       if (!is.finite(precision) || precision < 0 || precision > 6) {
         stop("Decimal places must be between 0 and 6.")
       }
-      if (!nzchar(trimws(input$new_unit %||% ""))) stop("Enter a unit for the quantity.")
 
       shiny::showModal(shiny::modalDialog(
         title = "Facilitator Consent: Data Integrity & Platform Access",
@@ -455,6 +471,20 @@ app_server <- function(input, output, session) {
         methods <- setdiff(methods, "chips_and_bins")
         if (!length(methods)) methods <- "quantile"
       }
+      institution_val <- trimws(input$new_institution %||% "")
+      if (!nzchar(institution_val)) {
+        institution_val <- "Achutha Menon Centre for Health Science Studies (AMCHSS), SCTIMST, Trivandrum"
+      }
+      contact_email_val <- trimws(input$new_contact_email %||% "")
+      if (!nzchar(contact_email_val)) {
+        contact_email_val <- rv$user$email %||% ""
+      }
+      v_contact <- validate_email(contact_email_val)
+      if (!v_contact$ok) {
+        stop(sprintf("Invalid Lead Contact Email: %s", v_contact$message), call. = FALSE)
+      }
+      contact_email_val <- v_contact$clean
+
       st <- create_study(
         rv$user,
         title = trimws(input$new_title),
@@ -462,24 +492,35 @@ app_server <- function(input, output, session) {
         quantity = input$new_qty %||% "",
         methods = methods,
         variable_type = variable_type,
-        unit = trimws(input$new_unit),
+        unit = if (nzchar(trimws(input$new_unit %||% ""))) {
+          trimws(input$new_unit)
+        } else {
+          switch(as.character(variable_type),
+            "proportion" = "probability",
+            "count" = "count",
+            "continuous" = "units",
+            "probability"
+          )
+        },
         lower = lower,
         upper = upper,
         precision = precision,
         preferred_distribution = "best",
+        institution = institution_val,
+        contact_email = contact_email_val,
         consent = list(
           consented = TRUE,
           consentedAt = iso_now(),
           consentedBy = rv$user$id,
           consentedEmail = rv$user$email,
-          institution = "AMCHSS · SCTIMST",
+          institution = institution_val,
           version = "1.0",
           terms = "Neutrality, Confidentiality, Methodology, Compliance & Auditing"
         )
       )
       rv$study_id <- doc_id(st)
       rv$page <- "study"
-      rv$msg <- "Survey created with AMCHSS · SCTIMST Data Integrity Consent recorded."
+      rv$msg <- sprintf("Survey created with Data Integrity Consent recorded for %s.", institution_val)
     }, error = function(e) ee_handle(rv, e, "confirm_create_study"))
   })
 
@@ -519,7 +560,7 @@ app_server <- function(input, output, session) {
     st <- get_cached_study(rv$study_id)
     tryCatch({
       require_study_manager(rv$user, st, "invite experts to this study")
-      p <- invite_expert(st, input$invite_email, input$invite_name, rv$user)
+      p <- invite_expert(st, input$invite_email, input$invite_name, input$invite_affil %||% "", rv$user)
       tok <- issue_invite_token(st, p)
       rv$experts_cache <- study_experts(st)
       rv$msg <- sprintf(
@@ -528,6 +569,7 @@ app_server <- function(input, output, session) {
       )
       shiny::updateTextInput(session, "invite_email", value = "")
       shiny::updateTextInput(session, "invite_name", value = "")
+      shiny::updateTextInput(session, "invite_affil", value = "")
     }, error = function(e) ee_handle(rv, e, "invite_expert"))
   })
 
@@ -656,9 +698,18 @@ app_server <- function(input, output, session) {
     }, error = function(e) ee_handle(rv, e, "save_study_details"))
   })
 
+  shiny::observeEvent(input$btn_round_actions, {
+    shiny::req(rv$study_id)
+    st <- get_cached_study(rv$study_id)
+    if (!is.null(st)) {
+      shiny::showModal(round_actions_modal(st, rv$user))
+    }
+  })
+
   shiny::observeEvent(input$archive_study, {
     shiny::req(rv$study_id)
     tryCatch({
+      shiny::removeModal()
       archive_study(get_cached_study(rv$study_id), rv$user)
       rv$study_cache <- NULL
       rv$questions_cache <- NULL
@@ -671,6 +722,7 @@ app_server <- function(input, output, session) {
 
   shiny::observeEvent(input$advance_round, {
     tryCatch({
+      shiny::removeModal()
       st <- get_cached_study(rv$study_id)
       require_study_manager(rv$user, st, "advance this study")
       st <- advance_round(st)
@@ -683,6 +735,7 @@ app_server <- function(input, output, session) {
 
   shiny::observeEvent(input$complete_study, {
     tryCatch({
+      shiny::removeModal()
       st <- complete_study(get_cached_study(rv$study_id), rv$user)
       rv$study_cache <- st
       rv$msg <- "Study marked complete. Consensus is ready for review and reporting."
@@ -913,6 +966,28 @@ app_server <- function(input, output, session) {
       ee_log("info", sprintf("expert %s submitted survey round %d for study %s", rv$survey_user$email, cur_r, doc_id(rv$survey_study)),
              where = "survey_final_submit")
     }, error = function(e) ee_handle(rv, e, "survey_final_submit"))
+  })
+
+  shiny::observeEvent(input$retake_demo_survey, {
+    shiny::req(rv$survey_study, rv$survey_user)
+    tryCatch({
+      sid <- doc_id(rv$survey_study)
+      pid <- survey_pid()
+      acc <- db_one("study_access", sprintf(
+        '{"studyId": %s, "personId": %s, "accessRole": "expert"}',
+        json_escape(sid), json_escape(pid)
+      ))
+      if (!is.null(acc)) {
+        db_update("study_access", q_id(doc_id(acc)), list(
+          status = "active",
+          submittedRound = 0L,
+          updatedAt = iso_now()
+        ))
+      }
+      rv$survey_page <- 1L
+      rv$msg <- "Demo survey reset to Page 1 for demonstration."
+      rv$err <- ""
+    }, error = function(e) ee_handle(rv, e, "retake_demo_survey"))
   })
 
   shiny::observeEvent(input$goto_study, {

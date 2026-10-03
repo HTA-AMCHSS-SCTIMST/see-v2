@@ -60,7 +60,9 @@ create_study <- function(user, title, description = "", quantity = "",
                          variable_type = "proportion", unit = "probability",
                          lower = 0, upper = 1, precision = 2,
                          preferred_distribution = "best",
-                         consent = NULL) {
+                         consent = NULL,
+                         institution = NULL,
+                         contact_email = NULL) {
   lower <- as.numeric(lower)
   upper <- as.numeric(upper)
   precision <- as.integer(precision)
@@ -70,7 +72,14 @@ create_study <- function(user, title, description = "", quantity = "",
   if (!variable_type %in% c("proportion", "continuous", "count")) {
     stop("Unsupported variable type.")
   }
-  if (!nzchar(trimws(unit %||% ""))) stop("A unit is required.")
+  if (!nzchar(trimws(unit %||% ""))) {
+    unit <- switch(as.character(variable_type),
+      "proportion" = "probability",
+      "count" = "count",
+      "continuous" = "units",
+      "probability"
+    )
+  }
   if (!is.finite(precision) || precision < 0 || precision > 6) {
     stop("Decimal places must be between 0 and 6.")
   }
@@ -79,6 +88,11 @@ create_study <- function(user, title, description = "", quantity = "",
   org <- ensure_org()
   now <- iso_now()
   slug <- unique_slug(slugify(title))
+  inst_clean <- trimws(institution %||% "")
+  if (!nzchar(inst_clean)) inst_clean <- "Achutha Menon Centre for Health Science Studies (AMCHSS), SCTIMST, Trivandrum"
+  email_clean <- trimws(contact_email %||% "")
+  if (!nzchar(email_clean)) email_clean <- user$email %||% ""
+
   protocol_config <- list(
     methods = as.list(methods),
     currentRound = 1L,
@@ -92,7 +106,8 @@ create_study <- function(user, title, description = "", quantity = "",
     precision = precision,
     preferredDistribution = preferred_distribution,
     surveyWelcome = list(
-      conductedBy = "Achutha Menon Centre for Health Science Studies (AMCHSS), SCTIMST, Trivandrum",
+      conductedBy = inst_clean,
+      institution = inst_clean,
       why = description %||% "To capture structured expert judgment for decision support.",
       reason = "SHELF expert elicitation for HTA / clinical decision support.",
       instructions = "Complete chips-and-bins and/or P10/P50/P90 tasks, then submit.",
@@ -103,7 +118,8 @@ create_study <- function(user, title, description = "", quantity = "",
       upperBound = upper,
       precision = precision,
       preferredDistribution = preferred_distribution,
-      contactEmail = user$email
+      contactEmail = email_clean,
+      technicalHost = "AMCHSS, SCTIMST"
     ),
     caseStudyMeta = list(
       quantityOfInterest = quantity,
@@ -117,7 +133,7 @@ create_study <- function(user, title, description = "", quantity = "",
       consented = TRUE,
       consentedAt = now,
       consentedBy = user$id,
-      institution = "AMCHSS · SCTIMST",
+      institution = inst_clean,
       version = "1.0"
     )
   }
@@ -233,8 +249,9 @@ list_studies_for_user <- function(user) {
   ids <- unique(vapply(access, function(a) as.character(a$studyId %||% ""), character(1)))
   ids <- ids[nzchar(ids)]
   owned <- if (is_facilitator(user)) db_all("studies", q_field("ownerId", user$id)) else list()
+  demo_s <- if (is_facilitator(user)) db_all("studies", '{"slug": "infection-rate-demo"}') else list()
   extra <- lapply(ids, function(id) db_one("studies", q_id(id)))
-  all_s <- c(owned, Filter(Negate(is.null), extra))
+  all_s <- c(owned, demo_s, Filter(Negate(is.null), extra))
   seen <- character()
   out <- list()
   for (s in all_s) {
@@ -338,17 +355,23 @@ remove_study_question <- function(study, question_id, user) {
   invisible(TRUE)
 }
 
-invite_expert <- function(study, email, name = NULL, user) {
-  email <- tolower(trimws(email))
+invite_expert <- function(study, email, name = NULL, affiliation = "", user) {
+  v_res <- validate_email(email)
+  if (!v_res$ok) {
+    stop(v_res$message, call. = FALSE)
+  }
+  email <- v_res$clean
   org <- ensure_org()
   now <- iso_now()
   person <- find_person_by_email(email)
+  affil_clean <- trimws(as.character(affiliation %||% ""))
   if (is.null(person)) {
     person <- db_insert("people", list(
       orgId = doc_id(org),
       personType = "expert",
       name = name %||% email,
       email = email,
+      affiliation = affil_clean,
       expertise = list(),
       tags = list(),
       inviteStatus = "invited",
@@ -356,6 +379,13 @@ invite_expert <- function(study, email, name = NULL, user) {
       createdAt = now,
       updatedAt = now
     ))
+  } else if (nzchar(affil_clean) && (!nzchar(person$affiliation %||% "") || !is.null(name))) {
+    # If person exists, update affiliation and name if provided
+    update_data <- list(updatedAt = now)
+    if (nzchar(affil_clean)) update_data$affiliation <- affil_clean
+    if (!is.null(name) && nzchar(trimws(name))) update_data$name <- trimws(name)
+    db_update("people", q_id(doc_id(person)), update_data)
+    person <- find_person_by_email(email)
   }
   exists <- db_one("study_access", sprintf(
     '{"studyId": %s, "personId": %s, "accessRole": "expert", "status": "active"}',
@@ -399,6 +429,19 @@ study_experts <- function(study) {
     s_val <- as.character(a$status %||% "active")
     !s_val %in% c("removed", "revoked", "inactive")
   }, access)
+  if (!length(access)) return(list())
+
+  # Deduplicate access entries by personId to guarantee no duplicate rows
+  seen_pids <- character()
+  deduped_access <- list()
+  for (a in access) {
+    pid <- as.character(a$personId %||% "")
+    if (nzchar(pid) && !pid %in% seen_pids) {
+      seen_pids <- c(seen_pids, pid)
+      deduped_access[[length(deduped_access) + 1]] <- a
+    }
+  }
+  access <- deduped_access
   if (!length(access)) return(list())
 
   # Batch fetch all people, judgments, and tokens in 3 queries instead of 20+ sequential queries
@@ -463,6 +506,7 @@ study_experts <- function(study) {
       personId = a$personId,
       name = if (!is.null(person)) (person$name %||% person$email %||% "Expert") else "Expert",
       email = if (!is.null(person)) (person$email %||% "") else "",
+      affiliation = if (!is.null(person)) (person$affiliation %||% "") else "",
       currentRound = cur_r,
       submittedRound = sub_r,
       answeredCount = answered,

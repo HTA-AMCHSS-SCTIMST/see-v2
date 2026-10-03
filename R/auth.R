@@ -66,7 +66,11 @@ link_person_to_user <- function(user_id, email) {
 
 dev_login <- function(email, display_name, platform_role) {
   stopifnot(ee_auth_dev_mode())
-  email <- tolower(trimws(email))
+  v_res <- validate_email(email)
+  if (!v_res$ok) {
+    stop(v_res$message, call. = FALSE)
+  }
+  email <- v_res$clean
   role <- if (platform_role %in% ROLES) platform_role else "expert"
   org <- ensure_org()
   now <- iso_now()

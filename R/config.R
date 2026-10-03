@@ -195,3 +195,25 @@ ee_connect_user <- function(session) {
   u <- session$user
   if (is.null(u) || !nzchar(u)) NULL else u
 }
+
+# Strict server-side RFC 5322 compatible email validation
+validate_email <- function(email) {
+  clean <- tolower(trimws(as.character(email %||% "")))
+  if (!nzchar(clean)) {
+    return(list(ok = FALSE, clean = "", message = "Email address cannot be empty."))
+  }
+  # RFC 5322 pattern: valid local part + @ + domain with at least 2-letter TLD
+  pattern <- "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+  if (!grepl(pattern, clean)) {
+    return(list(
+      ok = FALSE,
+      clean = clean,
+      message = sprintf("'%s' is not a valid email address (e.g. name@institution.org).", clean)
+    ))
+  }
+  list(ok = TRUE, clean = clean, message = "")
+}
+
+is_valid_email <- function(email) {
+  isTRUE(validate_email(email)$ok)
+}

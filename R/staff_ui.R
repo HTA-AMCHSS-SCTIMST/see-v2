@@ -117,6 +117,14 @@ staff_dash_ui <- function(rv) {
       class = "panel create-panel",
       htmltools::tags$h3("Create survey"),
       shiny::textInput("new_title", "Title", placeholder = "HTA: Drug A vs Drug B"),
+      shiny::textInput("new_institution", "Conducting institution / organization",
+        value = "Achutha Menon Centre for Health Science Studies (AMCHSS), SCTIMST",
+        placeholder = "e.g. AMCHSS, SCTIMST, RCC Trivandrum, or AIIMS"
+      ),
+      shiny::textInput("new_contact_email", "Lead contact email",
+        value = user$email %||% "",
+        placeholder = "investigator@hospital.org"
+      ),
       shiny::textInput("new_qty", "Quantity of interest", placeholder = "5-year progression-free probability"),
       shiny::textAreaInput("new_desc", "Why this elicitation?", rows = 3),
       shiny::selectInput(
@@ -124,7 +132,6 @@ staff_dash_ui <- function(rv) {
         choices = c("Proportion / probability" = "proportion", "Continuous" = "continuous", "Count" = "count"),
         selected = "proportion"
       ),
-      shiny::textInput("new_unit", "Unit", value = "probability"),
       shiny::fluidRow(
         shiny::column(4, shiny::numericInput("new_lower", "Lower bound", value = 0, step = 0.01)),
         shiny::column(4, shiny::numericInput("new_upper", "Upper bound", value = 1, step = 0.01)),
@@ -174,7 +181,7 @@ staff_dash_ui <- function(rv) {
     htmltools::div(
       class = "page-head",
       htmltools::tags$h2("Surveys Dashboard"),
-      if (can_seed_demo(user)) shiny::actionButton("seed_demo", "Seed HTA demo", class = "btn-secondary")
+      if (can_seed_demo(user)) shiny::actionButton("seed_demo", "Seed Interactive Demo", class = "btn-secondary")
     ),
     kpi_banner,
     notice(rv$msg, "ok"),
@@ -213,7 +220,15 @@ staff_study_ui <- function(rv) {
         s_url <- ex$surveyUrl %||% ""
         s_qs  <- ex$queryString %||% s_url
         htmltools::tags$tr(
-          htmltools::tags$td(htmltools::strong(ex$name)),
+          htmltools::tags$td(
+            htmltools::strong(ex$name),
+            if (nzchar(ex$affiliation %||% "")) {
+              htmltools::div(
+                style = "font-size: 0.78rem; color: #64748b; margin-top: 2px;",
+                ex$affiliation
+              )
+            } else NULL
+          ),
           htmltools::tags$td(htmltools::span(class = "muted", ex$email)),
           htmltools::tags$td(
             if (can_invite(user, st) && nzchar(s_qs)) {
@@ -271,15 +286,31 @@ staff_study_ui <- function(rv) {
     )
   }
   shelf_btn <- if (can_view_shelf(user, st)) {
-    shiny::actionButton("goto_responses", "Responses >", class = "btn-primary", style = "background: #4f46e5; border-color: #4f46e5; font-weight: 600;")
+    shiny::actionButton(
+      "goto_responses",
+      "Responses & SHELF Consensus →",
+      class = "btn-primary",
+      style = "background: #4f46e5; border-color: #4f46e5; font-weight: 700; padding: 7px 16px; border-radius: 6px; box-shadow: 0 1px 2px rgba(79,70,229,0.25);"
+    )
   } else {
     NULL
   }
   download_btns <- if (can_export_audit(user, st)) {
-    shiny::div(
-      class = "btn-row",
-      style = "display: inline-flex; gap: 8px; align-items: center;",
-      shiny::actionButton("btn_open_export_modal", "📥 Export & Audit Center...", class = "btn-primary btn-sm", style = "background: #0d6efd; border-color: #0d6efd; color: white; font-weight: 600; padding: 6px 14px; border-radius: 6px;")
+    shiny::actionButton(
+      "btn_open_export_modal",
+      "📥 Export & Audit Center...",
+      class = "btn-secondary btn-sm",
+      style = "font-weight: 600; padding: 7px 14px; border-radius: 6px;"
+    )
+  } else {
+    NULL
+  }
+  round_actions_btn <- if (can_advance_round(user, st) || can_complete_study(user, st) || can_manage_study(user, st)) {
+    shiny::actionButton(
+      "btn_round_actions",
+      htmltools::HTML("⚙️ Round Actions <span style='font-size: 0.75rem; margin-left: 2px;'>▾</span>"),
+      class = "btn-secondary",
+      style = "font-weight: 600; padding: 7px 14px; border-radius: 6px; background: #f8fafc; border: 1px solid #cbd5e1; color: #1e293b; display: inline-flex; align-items: center; gap: 4px;"
     )
   } else {
     NULL
@@ -434,16 +465,10 @@ staff_study_ui <- function(rv) {
     shiny::div(
       class = "panel",
       htmltools::tags$h3("Invite expert"),
-      shiny::textInput("invite_email", "Email", width = "100%"),
-      shiny::textInput("invite_name", "Name (optional)", width = "100%"),
-      shiny::actionButton("invite_go", "Add expert", class = "btn-primary", style = "width: 100%;"),
-      htmltools::hr(),
-      if (can_advance_round(user, st)) shiny::actionButton(
-        "advance_round",
-        if (current_round(st) == 1L) "Initiate Delphi Round 2 →" else sprintf("Advance to Round %d →", current_round(st) + 1L),
-        class = "btn-secondary btn-block"
-      ),
-      if (can_complete_study(user, st)) shiny::actionButton("complete_study", "Mark elicitation complete", class = "btn-secondary btn-block")
+      shiny::textInput("invite_email", "Email", placeholder = "expert@hospital.org", width = "100%"),
+      shiny::textInput("invite_name", "Name (optional)", placeholder = "e.g. Dr. Priya Nair", width = "100%"),
+      shiny::textInput("invite_affil", "Affiliation / Hospital (optional)", placeholder = "e.g. RCC Trivandrum or AIIMS", width = "100%"),
+      shiny::actionButton("invite_go", "Add expert", class = "btn-primary", style = "width: 100%;")
     )
   } else {
     shiny::div(class = "panel", htmltools::tags$h3("Access"), htmltools::tags$p(class = "muted", "Read-only."))
@@ -452,24 +477,26 @@ staff_study_ui <- function(rv) {
     shiny::actionButton("goto_dash", "← Back to surveys", class = "btn-ghost"),
     htmltools::div(
       class = "page-head",
+      style = "display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;",
       htmltools::div(
         style = "display: flex; align-items: center; gap: 12px; flex-wrap: wrap;",
-        htmltools::tags$h2(style = "margin: 0;", st$title),
+        htmltools::tags$h2(style = "margin: 0; font-size: 1.45rem; font-weight: 800; color: #0f172a;", st$title),
         status_pill(st$status),
         htmltools::span(class = "pill", sprintf("Round %s", current_round(st))),
         htmltools::tags$a(
           href = study_qs,
           target = "_blank",
           class = "btn-secondary btn-sm",
-          style = "text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; padding: 4px 10px; border-radius: 6px; font-size: 0.82rem; background: #fff;",
+          style = "text-decoration: none; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; padding: 4px 10px; border-radius: 6px; font-size: 0.82rem; background: #e0e7ff; color: #4338ca; border: 1px solid #c7d2fe;",
           onclick = sprintf("var base = (window.location.origin + window.location.pathname).replace(/\\/+$/, ''); this.href = base + '/%s';", study_qs),
           "View Survey ↗"
         )
       ),
-      shiny::tagList(
+      htmltools::div(
+        style = "display: flex; align-items: center; gap: 10px; flex-wrap: wrap;",
+        round_actions_btn,
         download_btns,
-        shelf_btn,
-        if (can_manage_study(user, st)) shiny::actionButton("archive_study", "Archive survey", class = "btn-secondary")
+        shelf_btn
       )
     ),
     if (can_manage_study(user, st)) shiny::div(
@@ -717,7 +744,7 @@ resp_advance_round_btn_ui_content <- function(rv) {
   cur_r <- current_round(st)
   shiny::actionButton(
     "advance_round",
-    if (cur_r == 1L) "Initiate Delphi Round 2 →" else sprintf("Advance to Round %d →", cur_r + 1L),
+    if (cur_r == 1L) "Initiate Round 2 →" else sprintf("Advance to Round %d →", cur_r + 1L),
     class = "btn-secondary btn-block"
   )
 }
@@ -959,6 +986,136 @@ staff_people_ui <- function(rv) {
   ))
 }
 
+round_actions_modal <- function(study, user) {
+  cur_r <- current_round(study)
+  status_str <- study$status %||% "recruiting"
+  can_adv <- can_advance_round(user, study)
+  can_comp <- can_complete_study(user, study)
+  can_mng <- can_manage_study(user, study)
+
+  shiny::modalDialog(
+    title = htmltools::div(
+      style = "display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px;",
+      htmltools::div(
+        htmltools::tags$h3(style = "margin: 0; font-size: 1.15rem; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px;",
+          htmltools::span("⚙️"),
+          htmltools::span("Delphi Protocol & Study Lifecycle")
+        ),
+        htmltools::tags$p(style = "margin: 4px 0 0; font-size: 0.85rem; color: #64748b; font-weight: 400;",
+          sprintf("%s · Round %d (%s)", study$title %||% "Study", cur_r, status_str)
+        )
+      )
+    ),
+    size = "m",
+    easyClose = TRUE,
+    fade = TRUE,
+    footer = shiny::tagList(
+      shiny::modalButton("Close")
+    ),
+    shiny::div(
+      style = "display: flex; flex-direction: column; gap: 14px; padding-top: 6px;",
+
+      # Current status badge bar
+      htmltools::div(
+        style = "background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;",
+        htmltools::div(
+          htmltools::span(style = "font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;", "Active Round: "),
+          htmltools::strong(style = "color: #1e293b; font-size: 0.9rem;", sprintf("Round %d", cur_r))
+        ),
+        htmltools::div(
+          htmltools::span(style = "font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 6px;", "Status: "),
+          status_pill(status_str)
+        )
+      ),
+
+      # Action Card 1: Advance Round
+      htmltools::div(
+        style = "border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.03);",
+        htmltools::div(
+          style = "display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;",
+          htmltools::div(
+            style = "flex: 1;",
+            htmltools::tags$h4(style = "margin: 0 0 4px; font-size: 0.95rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px;",
+              htmltools::span("🔄"),
+              if (cur_r == 1L) "Initiate Round 2" else sprintf("Advance to Round %d", cur_r + 1L)
+            ),
+            htmltools::tags$p(style = "margin: 0; font-size: 0.83rem; color: #64748b; line-height: 1.45;",
+              if (cur_r == 1L) {
+                "Advance the study from Round 1 to Round 2. Panelists who reopen their survey link will see anonymized group distributions from Round 1 and can refine their judgments."
+              } else {
+                sprintf("Advance the panel to Delphi Round %d for further iterative feedback and refinement.", cur_r + 1L)
+              }
+            )
+          ),
+          if (can_adv) {
+            shiny::actionButton(
+              "advance_round",
+              if (cur_r == 1L) "Initiate Round 2 →" else sprintf("Advance to Round %d →", cur_r + 1L),
+              class = "btn-secondary btn-sm",
+              style = "border-color: #6366f1; color: #4338ca; font-weight: 700; padding: 6px 14px; border-radius: 6px; white-space: nowrap;"
+            )
+          } else {
+            htmltools::span(style = "font-size: 0.78rem; color: #94a3b8; font-style: italic; white-space: nowrap; padding-top: 4px;", "Not applicable")
+          }
+        )
+      ),
+
+      # Action Card 2: Mark Complete
+      htmltools::div(
+        style = "border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.03);",
+        htmltools::div(
+          style = "display: flex; justify-content: space-between; align-items: flex-start; gap: 14px;",
+          htmltools::div(
+            style = "flex: 1;",
+            htmltools::tags$h4(style = "margin: 0 0 4px; font-size: 0.95rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px;",
+              htmltools::span("✔"),
+              "Mark Elicitation Complete"
+            ),
+            htmltools::tags$p(style = "margin: 0; font-size: 0.83rem; color: #64748b; line-height: 1.45;",
+              "Conclude elicitation for this study. This locks the survey against further expert submissions and solidifies consensus for final SHELF reporting and decision modeling."
+            )
+          ),
+          if (can_comp) {
+            shiny::actionButton(
+              "complete_study",
+              "✔ Mark Complete",
+              class = "btn-secondary btn-sm",
+              style = "background: #ecfdf5; color: #059669; border-color: #a7f3d0; font-weight: 700; padding: 6px 14px; border-radius: 6px; white-space: nowrap;"
+            )
+          } else if (identical(status_str, "completed")) {
+            htmltools::span(class = "status-pill status-ready", "Completed")
+          } else {
+            htmltools::span(style = "font-size: 0.78rem; color: #94a3b8; font-style: italic; white-space: nowrap; padding-top: 4px;", "Not applicable")
+          }
+        )
+      ),
+
+      # Action Card 3: Archival (Safely isolated)
+      if (can_mng) {
+        htmltools::div(
+          style = "border: 1px dashed #cbd5e1; border-radius: 8px; padding: 12px 14px; background: #fdf2f2; margin-top: 4px;",
+          htmltools::div(
+            style = "display: flex; justify-content: space-between; align-items: center; gap: 14px;",
+            htmltools::div(
+              style = "flex: 1;",
+              htmltools::tags$h5(style = "margin: 0 0 2px; font-size: 0.88rem; font-weight: 700; color: #991b1b;", "Archive Survey"),
+              htmltools::tags$p(style = "margin: 0; font-size: 0.8rem; color: #7f1d1d;",
+                "Remove this study from active facilitator views and close expert intake."
+              )
+            ),
+            shiny::actionButton(
+              "archive_study",
+              "Archive Survey",
+              class = "btn-ghost btn-sm",
+              style = "color: #b91c1c; border: 1px solid #f87171; background: #fff; font-weight: 600; padding: 5px 12px; border-radius: 6px; white-space: nowrap;"
+            )
+          )
+        )
+      } else NULL
+    )
+  )
+}
+
 export_center_modal <- function(study, questions, user) {
   sid <- doc_id(study)
   q_choices <- if (length(questions) > 0) {
@@ -1034,6 +1191,75 @@ export_center_modal <- function(study, questions, user) {
         } else {
           htmltools::tags$p(class = "muted", "No questions registered in this study yet.")
         }
+      )
+    )
+  )
+}
+
+demo_walkthrough_modal <- function(seed_info) {
+  sid <- seed_info$studyId %||% ""
+  survey_url <- seed_info$surveyUrl %||% "#"
+  expert_emails <- paste(seed_info$expertEmails %||% character(), collapse = ", ")
+
+  shiny::modalDialog(
+    title = htmltools::div(
+      style = "display: flex; align-items: center; gap: 8px;",
+      htmltools::span("🎉"),
+      htmltools::span("Interactive Demo Ready: Surgical Site Infection Rate")
+    ),
+    easyClose = TRUE,
+    size = "l",
+    footer = shiny::modalButton("Dismiss"),
+    shiny::div(
+      style = "display: flex; flex-direction: column; gap: 1.2rem;",
+
+      # Explanation banner
+      htmltools::div(
+        style = "background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 1rem 1.25rem;",
+        htmltools::tags$h4(style = "margin: 0 0 0.4rem; color: #166534; font-size: 1rem;", "What is this demo?"),
+        htmltools::tags$p(style = "margin: 0; color: #15803d; font-size: 0.88rem; line-height: 1.5;",
+          "This pre-configured study demonstrates how the platform conducts SHELF expert elicitation from clinical question design to mathematical consensus aggregation."
+        )
+      ),
+
+      # Features overview
+      htmltools::div(
+        style = "border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.1rem; background: #ffffff;",
+        htmltools::tags$h4(style = "margin: 0 0 0.8rem; font-size: 0.95rem; color: #1e293b;", "📋 Demo Highlights"),
+        htmltools::tags$ul(style = "margin: 0; padding-left: 1.2rem; color: #475569; font-size: 0.88rem; line-height: 1.6;",
+          htmltools::tags$li(htmltools::strong("Clinical Topic: "), "30-day surgical site infection rate (%) under a new antiseptic protocol (Bounds: 0% to 25%)."),
+          htmltools::tags$li(htmltools::strong("4 Expert Clinicians: "), "Contrasting viewpoints from Kerala hospitals (Optimist Dr. Priya at 3-4%, Cautious Dr. Rahul at 10%, Moderate Dr. Lakshmi at 7%, and Dr. Arun with wide uncertainty)."),
+          htmltools::tags$li(htmltools::strong("2 Elicitation Methods: "), "Task 1 demonstrates interactive Chips-and-Bins; Task 2 demonstrates 3-point Quantiles (P10 Low, P50 Likely, P90 High)."),
+          htmltools::tags$li(htmltools::strong("Pre-filled Round 1 Data: "), "All 4 experts have submitted responses so you can immediately inspect SHELF linear pooling and distribution fits.")
+        )
+      ),
+
+      # Action buttons
+      htmltools::div(
+        style = "display: flex; flex-direction: column; gap: 0.75rem; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 1.25rem;",
+        htmltools::tags$h4(style = "margin: 0 0 0.5rem; font-size: 0.95rem; color: #1e293b;", "🚀 Explore the Workflow"),
+        shiny::div(
+          style = "display: flex; gap: 10px; flex-wrap: wrap; align-items: center;",
+          htmltools::tags$button(
+            type = "button",
+            class = "btn-primary btn-sm",
+            style = "font-weight: 600; padding: 7px 14px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;",
+            onclick = sprintf("var base = (window.location.origin + window.location.pathname).replace(/\\/+$/, ''); window.open(base + '/%s', '_blank');", seed_info$queryString %||% "?study=infection-rate-demo"),
+            "👤 Take Survey as Expert (Dr. Priya) ↗"
+          ),
+          shiny::actionButton(
+            "demo_goto_consensus",
+            "📊 View SHELF Consensus Pool →",
+            class = "btn-secondary btn-sm",
+            style = "font-weight: 600; padding: 7px 14px;"
+          ),
+          shiny::actionButton(
+            "demo_goto_create",
+            "➕ Create Survey as Facilitator",
+            class = "btn-ghost btn-sm",
+            style = "font-weight: 600; padding: 7px 14px; border: 1px solid #94a3b8; color: #1e293b;"
+          )
+        )
       )
     )
   )

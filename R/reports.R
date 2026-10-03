@@ -119,6 +119,10 @@ write_audit_csv <- function(path, shelf_result, study = NULL, question = NULL, r
   if (is.null(df)) stop("No SHELF results to export. Run SHELF first.")
 
   # 1. Create a professional header section with facilitator question details
+  w_meta <- (study$protocolConfig %||% list())$surveyWelcome %||% list()
+  cond_inst <- w_meta$conductedBy %||% w_meta$institution %||% "Achutha Menon Centre for Health Science Studies (AMCHSS), SCTIMST"
+  contact_mail <- w_meta$contactEmail %||% ""
+
   q_code <- question$code %||% ""
   q_title <- question$title %||% "Unknown Question"
   q_prompt <- question$prompt %||% question$description %||% ""
@@ -128,6 +132,8 @@ write_audit_csv <- function(path, shelf_result, study = NULL, question = NULL, r
 
   header <- c(
     sprintf("# STUDY: %s", study$title %||% "Unknown Study"),
+    sprintf("# CONDUCTING INSTITUTION: %s", cond_inst),
+    if (nzchar(contact_mail)) sprintf("# LEAD CONTACT: %s", contact_mail) else NULL,
     sprintf("# QUESTION CODE: %s", q_code),
     sprintf("# QUESTION TITLE: %s", q_title),
     if (nzchar(q_prompt)) sprintf("# FACILITATOR PROMPT: %s", q_prompt) else NULL,
@@ -181,8 +187,11 @@ write_audit_pdf <- function(path, shelf_result, study, question, round_number = 
   full_title <- safe_pdf_str(full_title)
 
   st_title <- safe_pdf_str(study$title %||% "Study")
+  w_meta_pdf <- (study$protocolConfig %||% list())$surveyWelcome %||% list()
+  cond_inst_pdf <- w_meta_pdf$conductedBy %||% w_meta_pdf$institution %||% "Achutha Menon Centre for Health Science Studies (AMCHSS), SCTIMST"
   sub_parts <- c(
     sprintf("Study: %s - Round %d", st_title, round_number),
+    sprintf("Conducted by: %s", safe_pdf_str(cond_inst_pdf)),
     if (nzchar(q_prompt)) sprintf("Prompt: %s", safe_pdf_str(q_prompt)) else NULL
   )
   sub_text <- paste(sub_parts, collapse = "\n")
