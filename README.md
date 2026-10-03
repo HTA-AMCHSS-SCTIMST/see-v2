@@ -17,7 +17,6 @@ The platform quantifies subjective parameter uncertainty for health economic mod
   * **Round 1 (Independent Judgments):** New experts always start in Round 1, providing uninfluenced baseline judgments. Responses are locked upon submission.
   * **Facilitator Deliberation Gate:** Facilitator reviews group fits, true mean estimates, and peer rationales to decide whether consensus has been reached or if Delphi Round 2 is needed.
   * **Round 2 (Deliberation & Re-elicitation):** Experts engage in blinded peer review (viewing their personal Round 1 numbers vs. group consensus and peer rationales) and re-assess parameters with **pre-filled Round 1 baselines**.
-* **Streamlined IEC Compliance:** SCTIMST Institutional Ethics Committee compliant digital consent barrier; strict participant de-identification (*Expert A, Expert B, Expert C...*).
 * **Dual Elicitation Modalities:**
   * **Low-High-Best Quantiles ($P_{10} / P_{50} / P_{90}$):** Strict monotonicity enforcement ($L \le P_{10} < P_{50} < P_{90} \le U$).
   * **Chips-and-Bins (Roulette):** 20 chips interactively allocated across 10 dynamically scaled histogram bins for skewed variables.
@@ -31,7 +30,7 @@ The platform quantifies subjective parameter uncertainty for health economic mod
 |---|---|---|
 | **Front-End & UI** | R Shiny, htmltools, CSS3, JavaScript | Reactive wizard flow, step indicators, AMCHSS-SCTIMST clinical design system. |
 | **Interactive Visuals** | Plotly, ggplot2, `www/chips.js` | Dynamic PDF/CDF density charts, consensus curves, and interactive chip grid. |
-| **Statistical Engine** | Custom Oakley SHELF & CRAN SHELF | Non-linear optimization, cumulative probability integration, linear opinion pooling. |
+| **Statistical Engine** | CRAN SHELF | Non-linear optimization, cumulative probability integration, linear opinion pooling. |
 | **Database & Persistence** | PostgreSQL / Supabase (`JSONB`) | Relational storage for studies, parameters, versioned judgments, and immutable audit logs. |
 | **Authentication & Tokens** | 256-bit Cryptographic Tokens | Dynamic origin link generation (`/?study=<slug>&t=<token>`), session auto-healing. |
 | **Reporting & Synthesis** | Quarto, rmarkdown, knitr | Publication-ready HTA audit dossiers, parameter tables, and mathematical reports. |
