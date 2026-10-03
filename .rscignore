@@ -1,0 +1,8 @@
+# Files and directories ignored by rsconnect during deployment to shinyapps.io
+.DS_Store
+.Renviron.example
+data-raw
+logs
+deploy
+run_local.R
+schema.sql

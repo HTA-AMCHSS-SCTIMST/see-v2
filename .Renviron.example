@@ -1,0 +1,46 @@
+# Configuration Template for Expert Elicitation Platform
+# Copy this file to .Renviron in the root directory before running or deploying.
+# IMPORTANT: Never commit actual credentials to public git repositories.
+
+# =============================================================================
+# Option A: Supabase (PostgreSQL) — Recommended for shinyapps.io
+# =============================================================================
+# Get this from Supabase Dashboard -> Project Settings -> Database -> Connection string
+# Use the "Connection pooler" string (Transaction mode, port 6543) for serverless/cloud:
+SUPABASE_DB_URL=postgresql://postgres.your-project-ref:your-password@aws-0-your-region.pooler.supabase.com:6543/postgres
+
+# Alternatively, discrete credentials can be provided:
+# SUPABASE_HOST=aws-0-your-region.pooler.supabase.com
+# SUPABASE_PORT=6543
+# SUPABASE_DB=postgres
+# SUPABASE_USER=postgres.your-project-ref
+# SUPABASE_PASSWORD=your-password
+
+# =============================================================================
+# Application Settings
+# =============================================================================
+# Application Role: both | staff | survey
+# 'both' serves staff dashboard at / and surveys at /?study=...
+APP_ROLE=both
+
+# Authentication:
+# Set to 'true' to allow one-click dev/passwordless role selection (recommended for testing/staging)
+# Set to 'false' in production when using OIDC or invite tokens
+AUTH_DEV_MODE=true
+
+# Public URL of the app (used when generating expert invite links)
+# For shinyapps.io, set this to: https://<your-account>.shinyapps.io/<your-app-name>
+SURVEY_PUBLIC_URL=http://127.0.0.1:3938
+
+# Session idle timeout in minutes
+SESSION_TIMEOUT_MINUTES=30
+
+# =============================================================================
+# Optional: OIDC / Auth0 Authentication (leave empty if not using OIDC)
+# =============================================================================
+# OIDC_ISSUER=https://your-tenant.us.auth0.com
+# OIDC_CLIENT_ID=your_client_id
+# OIDC_CLIENT_SECRET=your_client_secret
+# OIDC_REDIRECT_URI=https://<your-account>.shinyapps.io/<your-app-name>
+# OIDC_STATE_SECRET=generate_a_random_32_character_string_here
+# OIDC_SCOPE=openid profile email

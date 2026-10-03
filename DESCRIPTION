@@ -1,0 +1,27 @@
+Type: Shiny
+Package: elicitation
+Title: STRUCTURE EXPERT ELICITATION - AMCHSS
+Version: 0.1.0
+Authors@R: person("AMCHSS", "SCTIMST", role = c("aut", "cre"))
+Description: SHELF-style expert elicitation Shiny app for HTA / clinical
+    decision support. Supabase (PostgreSQL) storage; CRAN SHELF fitting.
+License: file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 4.1.0)
+Imports:
+    shiny (>= 1.8.0),
+    htmltools,
+    DBI,
+    RPostgres,
+    jsonlite,
+    ggplot2,
+    plotly,
+    SHELF,
+    httr2,
+    openssl
+Suggests:
+    rsconnect,
+    knitr
+Remotes:
+RoxygenNote: 7.3.2
