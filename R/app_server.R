@@ -1570,6 +1570,43 @@ app_server <- function(input, output, session) {
     survey_page_body_content(input, rv, st, qs, r_num, pages, idx)
   })
 
+  # Real-time distribution preview for expert quantile elicitation
+  current_survey_page_obj <- function() {
+    if (is.null(rv$survey_study) || is.null(rv$survey_page)) return(NULL)
+    st <- rv$survey_study
+    qs <- rv$survey_questions %||% study_questions(doc_id(st))
+    r_num <- rv$survey_round %||% 1L
+    pages <- survey_pages(st, qs, r_num)
+    idx <- max(1L, min(as.integer(rv$survey_page %||% 1L), length(pages)))
+    pages[[idx]]
+  }
+
+  current_quantile_preview <- shiny::reactive({
+    pg <- current_survey_page_obj()
+    if (is.null(pg) || !identical(pg$kind, "quantile") || is.null(pg$question)) return(NULL)
+    q_obj <- pg$question
+    lo <- as.numeric(q_obj$lowerBound %||% rv$bound_lo %||% 0)
+    hi <- as.numeric(q_obj$upperBound %||% rv$bound_hi %||% 1)
+    mode <- input$q_mode %||% "percentile"
+    single_expert_preview_fit(lo, hi, input$p10, input$p50, input$p90, mode = mode)
+  })
+
+  output$expert_quantile_preview_card <- shiny::renderUI({
+    res <- current_quantile_preview()
+    if (is.null(res)) return(NULL)
+    pg <- current_survey_page_obj()
+    unit_q <- if (!is.null(pg$question)) pg$question$unit %||% "%" else "%"
+    render_expert_quantile_preview_ui(res, unit_label = unit_q, mode = input$q_mode %||% "percentile")
+  })
+
+  output$expert_quantile_preview_plot <- shiny::renderPlot({
+    res <- current_quantile_preview()
+    if (is.null(res) || !isTRUE(res$ok)) return(NULL)
+    pg <- current_survey_page_obj()
+    unit_q <- if (!is.null(pg$question)) pg$question$unit %||% "%" else "%"
+    draw_expert_quantile_preview_plot(res, unit_label = unit_q)
+  })
+
   # Export & Audit Center Modal Handlers
   open_export_modal <- function() {
     st <- find_study(rv$study_id)

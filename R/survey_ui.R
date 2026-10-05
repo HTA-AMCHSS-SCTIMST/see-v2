@@ -454,6 +454,7 @@ survey_page_body_content <- function(input, rv, st, qs, r_num, pages, idx) {
           shiny::column(4, shiny::numericInput("p50", "P50 / Median (Best estimate)", value = val_p50, min = lo_q, max = hi_q, step = step_q)),
           shiny::column(4, shiny::numericInput("p90", "P90 / Q3 (Upper)", value = val_p90, min = lo_q, max = hi_q, step = step_q))
         ),
+        shiny::uiOutput("expert_quantile_preview_card"),
         shiny::textAreaInput(
           "q_rationale",
           if (is_r2) sprintf("Clinical / scientific rationale for %s (Round %d)", q_obj$title, pg$round_num %||% 2L)
